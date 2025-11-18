@@ -1,68 +1,191 @@
-# Video Converter Script
+# Video Transcription & Meeting Summary Tool 🎙️🤖
 
-Script Python để convert file MP4 sang MP3 và cắt thành các đoạn 15 phút.
+Script Python tự động chuyển đổi video cuộc họp thành transcript (gỡ băng) và tóm tắt nội dung với Gemini AI.
 
-## Yêu cầu
+## ✨ Tính năng
 
-Cài đặt thư viện cần thiết:
+### 🎬 Script đơn giản - `convert_simple.py`
+- Convert MP4 → MP3
+- Cắt thành các đoạn 25 phút
+- Không cần API key
+
+### 🤖 Script với AI - `convert_with_gemini.py` (Khuyên dùng)
+- Convert MP4 → MP3
+- Cắt thành các đoạn 25 phút
+- **Bước 1**: Tự động transcript (gỡ băng) theo chuẩn Clean Verbatim
+- **Bước 2**: Tóm tắt cuộc họp và tạo Action Plan
+- Sử dụng Gemini AI 2.5 Flash
+
+## 📋 Yêu cầu hệ thống
+
+### 1. Cài đặt ffmpeg
+
+**Windows:**
+```bash
+winget install ffmpeg
+```
+
+Hoặc tải từ: https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
+
+**macOS:**
+```bash
+brew install ffmpeg
+```
+
+**Linux:**
+```bash
+sudo apt install ffmpeg
+```
+
+### 2. Cài đặt thư viện Python
+
+**Cho script đơn giản:**
+```bash
+# Chỉ cần ffmpeg, không cần thư viện Python
+```
+
+**Cho script với Gemini AI:**
+```bash
+pip install google-generativeai
+```
+
+## 🚀 Cách sử dụng
+
+### Script đơn giản (Không có AI)
 
 ```bash
-pip install moviepy
+python convert_simple.py "path/to/video.mp4"
 ```
 
-**Lưu ý:** `moviepy` yêu cầu `ffmpeg` để hoạt động. Nếu chưa có ffmpeg, `moviepy` sẽ tự động tải về khi chạy lần đầu.
+### Script với Gemini AI (Khuyên dùng)
 
-## Cách sử dụng
+**Bước 1:** Cấu hình API key
 
-### Cách 1: Truyền đường dẫn file qua command line
+Mở file `convert_with_gemini.py` và thay thế API key của bạn:
+
+```python
+GEMINI_API_KEY = "YOUR_API_KEY_HERE"
+```
+
+Lấy API key miễn phí tại: https://makersuite.google.com/app/apikey
+
+**Bước 2:** Chạy script
 
 ```bash
-python video_converter.py "path/to/your/video.mp4"
+python convert_with_gemini.py "path/to/video.mp4"
 ```
 
-### Cách 2: Chạy script và nhập đường dẫn khi được yêu cầu
+Hoặc chạy và nhập đường dẫn khi được hỏi:
 
 ```bash
-python video_converter.py
+python convert_with_gemini.py
 ```
 
-Sau đó nhập đường dẫn file MP4 khi được hỏi.
+## 📁 Kết quả
 
-## Kết quả
+### Script đơn giản
+```
+video_name_output/
+├── video_name.mp3              # File MP3 gốc
+└── segments/
+    ├── video_name_part01.mp3   # Đoạn 1 (25 phút)
+    ├── video_name_part02.mp3   # Đoạn 2 (25 phút)
+    └── ...
+```
 
-Script sẽ tạo:
+### Script với Gemini AI
+```
+video_name_output/
+├── video_name.mp3                      # File MP3 gốc
+├── segments/
+│   ├── video_name_part01.mp3          # Đoạn 1 (25 phút)
+│   ├── video_name_part02.mp3          # Đoạn 2 (25 phút)
+│   └── ...
+├── video_name_FULL_TRANSCRIPT.txt     # Gỡ băng đầy đủ (Clean Verbatim)
+└── video_name_SUMMARY.txt             # Tóm tắt & Action Plan
+```
 
-1. **File MP3 đầy đủ** trong thư mục `output/`
-   - Ví dụ: `output/video_name.mp3`
+## 📝 Format Transcript (Clean Verbatim)
 
-2. **Các đoạn 15 phút** trong thư mục `output/segments/`
-   - Ví dụ:
-     - `output/segments/video_name_part01.mp3`
-     - `output/segments/video_name_part02.mp3`
-     - `output/segments/video_name_part03.mp3`
-     - ...
+Transcript được gỡ băng theo chuẩn Clean Verbatim với các quy tắc:
 
-## Tùy chỉnh
+- ✅ Loại bỏ từ đệm, từ rác (à, ờ, ừm, hừm...)
+- ✅ Loại bỏ âm thanh không phải lời nói ([ho], [cười]...)
+- ✅ Sửa lỗi lặp từ khi người nói tự sửa
+- ✅ Định danh người nói chính xác
+- ✅ Thuật ngữ chuyên ngành chính xác
 
-Để thay đổi độ dài mỗi đoạn, sửa tham số `segment_duration` trong hàm `split_audio_into_segments()`:
+**Ví dụ:**
+```
+Anh Thiện: Nội dung về kênh online chúng ta cần tăng cường.
 
-- Mặc định: `900` giây (15 phút)
-- 10 phút: `600` giây
-- 20 phút: `1200` giây
-- 30 phút: `1800` giây
+Phương Anh: Em đồng ý. Doanh số của ngành hàng Peri trên sàn đang tăng.
 
-## Ví dụ
+Anh Minh: Bên anh đang check lại model đó.
+```
+
+## 📊 Format Summary
+
+File summary bao gồm:
+
+- 🗣️ Chủ đề cuộc họp
+- 📌 Các vấn đề chính được thảo luận
+- ✅ Các quyết định & thống nhất
+- ⚠️ Các rủi ro / Trở ngại được nêu
+- ❓ Các vấn đề còn tồn đọng / Cần làm rõ
+- 📋 Kế Hoạch Hành Động (Todo) với bảng phân công
+
+## ⚙️ Tùy chỉnh
+
+### Thay đổi độ dài mỗi đoạn
+
+Mặc định: **25 phút** (1500 giây)
+
+Để thay đổi, sửa tham số `segment_duration` khi gọi hàm `split_audio()`:
+
+```python
+# 10 phút
+split_audio(mp3_path, segment_duration=600, output_folder=output_folder)
+
+# 20 phút
+split_audio(mp3_path, segment_duration=1200, output_folder=output_folder)
+
+# 30 phút
+split_audio(mp3_path, segment_duration=1800, output_folder=output_folder)
+```
+
+### Tùy chỉnh danh sách người tham gia
+
+Sửa trong `TRANSCRIPT_PROMPT` ở file `convert_with_gemini.py`:
+
+```python
+Thành viên tham gia (Sử dụng tên này để định danh người nói):
+- Sếp
+- Anh Thiện (Lead MKT)
+- Phương Anh (Lead sales online)
+...
+```
+
+## 🛠️ Các công cụ bổ trợ
+
+### `test_gemini_models.py`
+Kiểm tra danh sách models Gemini có sẵn với API key của bạn:
 
 ```bash
-python video_converter.py "C:\Videos\my_video.mp4"
+python test_gemini_models.py
 ```
 
-Kết quả:
-```
-output/
-  ├── my_video.mp3
-  └── segments/
-      ├── my_video_part01.mp3
-      ├── my_video_part02.mp3
-      └── my_video_part03.mp3
-```
+## 💡 Lưu ý
+
+- Gemini API miễn phí có giới hạn quota
+- Mỗi đoạn 25 phút tốn ~1-2 phút để transcript
+- File transcript và summary được lưu dạng UTF-8
+- Gemini 2.5 Flash hỗ trợ audio/video transcription tốt
+
+## 🤝 Đóng góp
+
+Mọi đóng góp đều được chào đón! Hãy tạo Pull Request hoặc Issue nếu có ý tưởng cải tiến.
+
+## 📄 License
+
+MIT License
