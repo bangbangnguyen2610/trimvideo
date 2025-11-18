@@ -9,10 +9,16 @@ import subprocess
 import time
 from pathlib import Path
 import google.generativeai as genai
+from supabase import create_client, Client
 
 # Cấu hình Gemini API
 GEMINI_API_KEY = "AIzaSyBg-P8MBhJllhisSRxsxPW8nEh-bQtu0w4"
 genai.configure(api_key=GEMINI_API_KEY)
+
+# Cấu hình Supabase
+SUPABASE_URL = "https://yaawmtegpzhcqmgimvbn.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlhYXdtdGVncHpoY3FtZ2ltdmJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0NDkwNTUsImV4cCI6MjA3OTAyNTA1NX0.qLLUaUg6s1VYxRbjNU-AXwSzy67VAdkhhtWntCLqqAQ"
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Prompt cho Gemini - TRANSCRIPT CLEAN VERBATIM
 TRANSCRIPT_PROMPT = """Nhiệm vụ: Gỡ băng file ghi âm cuộc họp theo tiêu chuẩn "Clean Verbatim" (Gỡ băng sạch).
@@ -406,6 +412,34 @@ def save_summary(summary_content, output_folder, video_name):
     return summary_file
 
 
+def upload_to_supabase(video_name, transcript_content, summary_content):
+    """Upload transcript và summary lên Supabase"""
+    print(f"\n{'='*70}")
+    print(f"ĐANG UPLOAD LÊN SUPABASE")
+    print(f"{'='*70}\n")
+
+    try:
+        print(f"📤 Đang upload dữ liệu lên Supabase...")
+
+        # Tạo data để insert
+        data = {
+            "video_name": video_name,
+            "transcript_content": transcript_content,
+            "summary_content": summary_content
+        }
+
+        # Insert vào Supabase
+        response = supabase.table("meeting_transcripts").insert(data).execute()
+
+        print(f"✓ Upload thành công lên Supabase!")
+        print(f"  Record ID: {response.data[0]['id'] if response.data else 'N/A'}")
+        return True
+
+    except Exception as e:
+        print(f"✗ Lỗi khi upload lên Supabase: {str(e)}")
+        return False
+
+
 def main():
     print("=" * 70)
     print("SCRIPT CONVERT VIDEO & TỰ ĐỘNG PHÂN TÍCH VỚI GEMINI AI")
@@ -474,6 +508,10 @@ def main():
     # Lưu toàn bộ transcript vào 1 file
     full_transcript_file = save_full_transcript(transcripts, output_folder, video_name)
 
+    # Đọc nội dung transcript để upload
+    with open(full_transcript_file, 'r', encoding='utf-8') as f:
+        transcript_content = f.read()
+
     # BƯỚC 2: Summary file transcript
     summary_content = summarize_transcript(full_transcript_file)
 
@@ -481,6 +519,10 @@ def main():
         save_summary(summary_content, output_folder, video_name)
     else:
         print("⚠️ Không thể tạo summary, nhưng transcript vẫn được lưu")
+        summary_content = ""  # Set empty nếu không có summary
+
+    # BƯỚC 3: Upload lên Supabase
+    upload_to_supabase(video_name, transcript_content, summary_content)
 
     print("\n" + "=" * 70)
     print("HOÀN THÀNH!")
@@ -490,6 +532,7 @@ def main():
     print(f"   - Các đoạn MP3 (trong thư mục segments/)")
     print(f"   - {video_name}_FULL_TRANSCRIPT.txt (Gỡ băng đầy đủ)")
     print(f"   - {video_name}_SUMMARY.txt (Tóm tắt & Action Plan)")
+    print(f"\n☁️  Đã upload lên Supabase Database")
 
 
 if __name__ == "__main__":
