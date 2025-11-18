@@ -14,7 +14,14 @@ Script Python tự động chuyển đổi video cuộc họp thành transcript 
 - Cắt thành các đoạn 25 phút
 - **Bước 1**: Tự động transcript (gỡ băng) theo chuẩn Clean Verbatim
 - **Bước 2**: Tóm tắt cuộc họp và tạo Action Plan
+- **Bước 3**: Upload transcript và summary lên Supabase
 - Sử dụng Gemini AI 2.5 Flash
+
+### ⚡ Script tự động - `auto_convert.py` (Tiện lợi nhất)
+- Tự động tìm file MP4 mới nhất trong thư mục Downloads
+- Không cần nhập đường dẫn file
+- Gọi `convert_with_gemini.py` để xử lý tự động
+- Upload kết quả lên Supabase
 
 ## 📋 Yêu cầu hệ thống
 
@@ -46,7 +53,7 @@ sudo apt install ffmpeg
 
 **Cho script với Gemini AI:**
 ```bash
-pip install google-generativeai
+pip install google-generativeai supabase
 ```
 
 ## 🚀 Cách sử dụng
@@ -80,6 +87,27 @@ Hoặc chạy và nhập đường dẫn khi được hỏi:
 ```bash
 python convert_with_gemini.py
 ```
+
+### Script tự động (Tiện lợi nhất)
+
+**Bước 1:** Cấu hình thư mục tìm kiếm
+
+Mở file `auto_convert.py` và sửa đường dẫn thư mục:
+
+```python
+DOWNLOAD_FOLDER = r"C:\Users\admin\Downloads\Tổng hợp MM"
+```
+
+**Bước 2:** Chạy script
+
+```bash
+python auto_convert.py
+```
+
+Script sẽ:
+1. Tự động tìm file MP4 mới nhất trong thư mục
+2. Convert, transcribe, summary và upload lên Supabase
+3. Không cần nhập đường dẫn file
 
 ## 📁 Kết quả
 
