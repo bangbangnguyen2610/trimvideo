@@ -52,46 +52,68 @@ async def health():
 
 @app.post("/webhook/lark-meeting")
 async def lark_meeting_webhook(
-    payload: WebhookPayload,
+    request: Request,
     background_tasks: BackgroundTasks
 ):
     """
-    Main webhook endpoint to receive Lark meeting notifications
+    Main webhook endpoint to receive Lark webhooks
 
-    Expected payload:
-    {
-        "meeting_url": "https://gearvn-com.sg.larksuite.com/minutes/obsgji9p2ik7j516z48l1ln2",
-        "event_type": "meeting_completed",
-        "timestamp": "2025-12-09T10:00:00Z"
-    }
+    Handles:
+    1. URL Verification Challenge from Lark
+    2. Event notifications (meeting completed, etc.)
     """
+    body = await request.json()
+
     print("=" * 70)
     print("📨 WEBHOOK RECEIVED")
     print("=" * 70)
-    print(f"Meeting URL: {payload.meeting_url}")
-    print(f"Event Type: {payload.event_type}")
-    print(f"Timestamp: {payload.timestamp}")
+    print(f"Body: {body}")
     print("=" * 70)
 
+    # Handle Lark URL Verification Challenge
+    # Lark sends: {"challenge": "xxx", "token": "xxx", "type": "url_verification"}
+    if body.get("type") == "url_verification" or "challenge" in body:
+        challenge = body.get("challenge", "")
+        print(f"✅ URL Verification - Returning challenge: {challenge}")
+        return {"challenge": challenge}
+
+    # Handle event callback
+    # Extract meeting URL from various possible payload formats
+    meeting_url = None
+
+    # Format 1: Direct meeting_url field
+    if "meeting_url" in body:
+        meeting_url = body["meeting_url"]
+
+    # Format 2: Nested in event
+    elif "event" in body:
+        event = body["event"]
+        meeting_url = event.get("meeting_url") or event.get("url")
+
+    # Format 3: Custom payload with url
+    elif "url" in body:
+        meeting_url = body["url"]
+
+    if not meeting_url:
+        print("⚠️ No meeting URL found in payload, acknowledging receipt")
+        return {"status": "received", "message": "No meeting URL to process"}
+
     # Validate meeting URL
-    if not payload.meeting_url or "larksuite.com/minutes/" not in payload.meeting_url:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid meeting URL format"
-        )
+    if "larksuite.com/minutes/" not in meeting_url and "feishu.cn/minutes/" not in meeting_url:
+        print(f"⚠️ Invalid meeting URL format: {meeting_url}")
+        return {"status": "received", "message": "Invalid meeting URL format"}
+
+    print(f"🚀 Processing meeting: {meeting_url}")
 
     # Trigger processing in background (non-blocking)
-    background_tasks.add_task(process_meeting, payload.meeting_url)
+    background_tasks.add_task(process_meeting, meeting_url)
 
     # Return immediate response to Lark
-    return JSONResponse(
-        status_code=202,
-        content={
-            "status": "accepted",
-            "message": "Meeting processing started in background",
-            "meeting_url": payload.meeting_url
-        }
-    )
+    return {
+        "status": "accepted",
+        "message": "Meeting processing started in background",
+        "meeting_url": meeting_url
+    }
 
 
 @app.post("/webhook/test")
