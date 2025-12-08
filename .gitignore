@@ -49,3 +49,22 @@ Thumbs.db
 output/
 outputs/
 temp/
+*_output/
+segments/
+
+# Audio files
+*.mp3
+*.wav
+
+# Environment variables
+.env
+.env.local
+
+# Logs
+*.log
+
+# Supabase local
+.supabase/
+
+# Railway
+.railway/
