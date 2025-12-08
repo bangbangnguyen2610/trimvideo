@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Lark API Client for downloading meeting recordings
+Uses user_access_token for Minutes API (requires OAuth authorization)
 """
 
 import os
@@ -19,26 +20,34 @@ LARK_APP_ID = os.getenv('LARK_APP_ID', 'cli_a9aab0f22978deed')
 LARK_APP_SECRET = os.getenv('LARK_APP_SECRET', 'qGF9xiBcIcZrqzpTS8wV3fB7ouywulDV')
 LARK_API_BASE = "https://open.larksuite.com/open-apis"
 
-# Cache for access token (to avoid re-authenticating every call)
-_access_token_cache = {
+# Import OAuth module for user_access_token
+try:
+    from lark_oauth import get_valid_access_token as get_user_access_token
+    HAS_OAUTH = True
+except ImportError:
+    HAS_OAUTH = False
+    print("⚠️ lark_oauth module not found, falling back to tenant_access_token")
+
+# Cache for tenant access token (fallback)
+_tenant_token_cache = {
     'token': None,
     'expires_at': 0
 }
 
 
-def authenticate() -> Optional[str]:
+def get_tenant_access_token() -> Optional[str]:
     """
-    Authenticate with Lark and get tenant_access_token
+    Get tenant_access_token (fallback, does NOT work for Minutes API)
 
     Returns:
         str: Access token if successful, None otherwise
     """
     # Check cache first
     current_time = time.time()
-    if _access_token_cache['token'] and current_time < _access_token_cache['expires_at']:
-        return _access_token_cache['token']
+    if _tenant_token_cache['token'] and current_time < _tenant_token_cache['expires_at']:
+        return _tenant_token_cache['token']
 
-    print("🔐 Authenticating with Lark...")
+    print("🔐 Getting tenant_access_token (fallback)...")
 
     url = f"{LARK_API_BASE}/auth/v3/tenant_access_token/internal"
     payload = {
@@ -57,18 +66,44 @@ def authenticate() -> Optional[str]:
             expires_in = data.get('expire', 7200)  # Default 2 hours
 
             # Cache token (subtract 5 minutes for safety)
-            _access_token_cache['token'] = token
-            _access_token_cache['expires_at'] = current_time + expires_in - 300
+            _tenant_token_cache['token'] = token
+            _tenant_token_cache['expires_at'] = current_time + expires_in - 300
 
-            print(f"✓ Authentication successful (expires in {expires_in}s)")
+            print(f"✓ Tenant token obtained (expires in {expires_in}s)")
             return token
         else:
-            print(f"✗ Authentication failed: {data.get('msg', 'Unknown error')}")
+            print(f"✗ Failed to get tenant token: {data.get('msg', 'Unknown error')}")
             return None
 
     except requests.exceptions.RequestException as e:
-        print(f"✗ Authentication request failed: {str(e)}")
+        print(f"✗ Request failed: {str(e)}")
         return None
+
+
+def authenticate() -> Optional[str]:
+    """
+    Get access token for Lark API
+
+    For Minutes API, uses user_access_token (requires OAuth)
+    Falls back to tenant_access_token if OAuth not available
+
+    Returns:
+        str: Access token if successful, None otherwise
+    """
+    # Try user_access_token first (required for Minutes API)
+    if HAS_OAUTH:
+        print("🔐 Getting user_access_token (required for Minutes API)...")
+        token = get_user_access_token()
+        if token:
+            return token
+        else:
+            print("⚠️ No valid user_access_token. OAuth authorization required.")
+            print("   Please visit: https://lark-meeting-webhook.onrender.com/oauth/authorize")
+            return None
+
+    # Fallback to tenant_access_token (won't work for Minutes API)
+    print("⚠️ Using tenant_access_token (may not work for Minutes API)")
+    return get_tenant_access_token()
 
 
 def extract_minute_token(meeting_url: str) -> Optional[str]:

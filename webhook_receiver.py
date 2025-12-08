@@ -7,7 +7,7 @@ Deploy this to Railway/Render for production use
 import os
 import sys
 from fastapi import FastAPI, Request, BackgroundTasks, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 from typing import Optional
 import uvicorn
@@ -15,8 +15,14 @@ import uvicorn
 # Fix encoding
 sys.stdout.reconfigure(encoding='utf-8')
 
-# Import processor
+# Import processor and OAuth
 from meeting_processor import process_meeting
+from lark_oauth import (
+    exchange_code_for_token,
+    get_authorization_url,
+    get_valid_access_token,
+    REDIRECT_URI
+)
 
 # Create FastAPI app
 app = FastAPI(
@@ -48,6 +54,126 @@ async def root():
 async def health():
     """Health check for Railway/Render"""
     return {"status": "healthy"}
+
+
+# ==================== OAuth Endpoints ====================
+
+@app.get("/oauth/authorize")
+async def oauth_authorize():
+    """
+    Redirect to Lark OAuth authorization page
+
+    Open this URL to start OAuth flow:
+    https://your-app.onrender.com/oauth/authorize
+    """
+    auth_url = get_authorization_url()
+    print(f"🔐 Redirecting to Lark OAuth: {auth_url}")
+    return RedirectResponse(url=auth_url)
+
+
+@app.get("/oauth/callback")
+async def oauth_callback(code: str = None, state: str = None, error: str = None):
+    """
+    OAuth callback endpoint - Lark redirects here after user authorization
+
+    Args:
+        code: Authorization code from Lark
+        state: State parameter for CSRF protection
+        error: Error if authorization failed
+    """
+    print("=" * 70)
+    print("📨 OAuth Callback Received")
+    print("=" * 70)
+    print(f"Code: {code[:20]}..." if code else "No code")
+    print(f"State: {state}")
+    print(f"Error: {error}")
+    print("=" * 70)
+
+    if error:
+        return HTMLResponse(content=f"""
+        <html>
+        <head><title>OAuth Error</title></head>
+        <body>
+            <h1>❌ Authorization Failed</h1>
+            <p>Error: {error}</p>
+            <p><a href="/oauth/authorize">Try again</a></p>
+        </body>
+        </html>
+        """, status_code=400)
+
+    if not code:
+        return HTMLResponse(content=f"""
+        <html>
+        <head><title>OAuth Error</title></head>
+        <body>
+            <h1>❌ No Authorization Code</h1>
+            <p>No code parameter received from Lark.</p>
+            <p><a href="/oauth/authorize">Try again</a></p>
+        </body>
+        </html>
+        """, status_code=400)
+
+    # Exchange code for token
+    token_data = exchange_code_for_token(code, REDIRECT_URI)
+
+    if token_data:
+        access_token = token_data.get('access_token', '')
+        expires_in = token_data.get('expires_in', 0)
+        refresh_expires = token_data.get('refresh_token_expires_in', 0)
+
+        return HTMLResponse(content=f"""
+        <html>
+        <head><title>OAuth Success</title></head>
+        <body>
+            <h1>✅ Authorization Successful!</h1>
+            <p>Token has been saved. The system will auto-refresh when needed.</p>
+            <hr>
+            <h3>Token Details:</h3>
+            <ul>
+                <li><strong>Access Token:</strong> {access_token[:30]}...</li>
+                <li><strong>Expires In:</strong> {expires_in} seconds ({expires_in // 60} minutes)</li>
+                <li><strong>Refresh Token Expires In:</strong> {refresh_expires} seconds ({refresh_expires // 3600} hours)</li>
+            </ul>
+            <hr>
+            <p>You can now close this page. Webhooks will use this token automatically.</p>
+            <p><a href="/oauth/status">Check Token Status</a></p>
+        </body>
+        </html>
+        """)
+    else:
+        return HTMLResponse(content=f"""
+        <html>
+        <head><title>OAuth Error</title></head>
+        <body>
+            <h1>❌ Token Exchange Failed</h1>
+            <p>Could not exchange authorization code for token.</p>
+            <p>Please check the server logs for details.</p>
+            <p><a href="/oauth/authorize">Try again</a></p>
+        </body>
+        </html>
+        """, status_code=500)
+
+
+@app.get("/oauth/status")
+async def oauth_status():
+    """
+    Check current OAuth token status
+    """
+    token = get_valid_access_token()
+
+    if token:
+        return {
+            "status": "valid",
+            "message": "Access token is valid and ready to use",
+            "token_preview": f"{token[:30]}..."
+        }
+    else:
+        auth_url = get_authorization_url()
+        return {
+            "status": "invalid",
+            "message": "No valid token. Authorization required.",
+            "authorize_url": auth_url
+        }
 
 
 @app.post("/webhook/lark-meeting")
