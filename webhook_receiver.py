@@ -2,6 +2,7 @@
 """
 Webhook Receiver - FastAPI app to receive Lark webhooks and trigger processing
 Deploy this to Railway/Render for production use
+Supports OAuth for user_access_token (required for Minutes API)
 """
 
 import os
