@@ -2,6 +2,8 @@
 
 Script Python tự động chuyển đổi video cuộc họp thành transcript (gỡ băng) và tóm tắt nội dung với Gemini AI.
 
+**🆕 NEW:** Full automation với Lark Meeting webhooks! Nhận webhook → Download → Transcript → Tag → Upload Supabase tự động.
+
 ## ✨ Tính năng
 
 ### 🎬 Script đơn giản - `convert_simple.py`
@@ -22,6 +24,19 @@ Script Python tự động chuyển đổi video cuộc họp thành transcript 
 - Không cần nhập đường dẫn file
 - Gọi `convert_with_gemini.py` để xử lý tự động
 - Upload kết quả lên Supabase
+
+### 🚀 **FULL AUTOMATION** - Lark Meeting Webhook System (Production-ready)
+- **Webhook Receiver**: Nhận HTTP requests từ Lark khi meeting hoàn thành
+- **Auto Download**: Tự động download video từ Lark API
+- **Extract Metadata**: Lấy tất cả thông tin meeting (title, date, participants, etc.)
+- **Processing Pipeline**: Convert → Transcript → Summary (tái sử dụng code có sẵn)
+- **Auto-Tagging**: Gemini tự động gắn tags:
+  - Meeting Type: "Họp dự án" | "Họp định kỳ"
+  - Meeting Topic: "Loyalty" | "Membership" | "Operation" | "Business" | "Data"
+- **Supabase Storage**: Upload tất cả vào database với full tracking
+- **Deploy**: Railway (webhook receiver) - ready to scale
+
+📖 **Chi tiết:** Xem [DEPLOYMENT.md](DEPLOYMENT.md) và [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 
 ## 📋 Yêu cầu hệ thống
 
