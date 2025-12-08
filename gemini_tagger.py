@@ -13,7 +13,7 @@ from typing import Optional, Dict
 sys.stdout.reconfigure(encoding='utf-8')
 
 # Gemini API Configuration
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'AIzaSyBg-P8MBhJllhisSRxsxPW8nEh-bQtu0w4')
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'AIzaSyAWQEyRsWktylLDrejCxni43DBqEdrG_Ew')
 genai.configure(api_key=GEMINI_API_KEY)
 
 # Tagging Prompt

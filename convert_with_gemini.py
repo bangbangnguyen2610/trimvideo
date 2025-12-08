@@ -12,7 +12,7 @@ import google.generativeai as genai
 from supabase import create_client, Client
 
 # Cấu hình Gemini API
-GEMINI_API_KEY = "AIzaSyBg-P8MBhJllhisSRxsxPW8nEh-bQtu0w4"
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'AIzaSyAWQEyRsWktylLDrejCxni43DBqEdrG_Ew')
 genai.configure(api_key=GEMINI_API_KEY)
 
 # Cấu hình Supabase
