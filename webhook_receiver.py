@@ -17,8 +17,23 @@ import uvicorn
 sys.stdout.reconfigure(encoding='utf-8')
 
 # Import processor and session module
-from meeting_processor import process_meeting
+from meeting_processor import process_meeting as _process_meeting
 from lark_session import save_session, load_session
+import traceback
+
+
+def process_meeting_safe(meeting_url: str):
+    """Wrapper to catch and log all errors from background task"""
+    try:
+        print(f"[BG Task] Starting processing for: {meeting_url}")
+        result = _process_meeting(meeting_url)
+        print(f"[BG Task] Completed with result: {result}")
+        return result
+    except Exception as e:
+        print(f"[BG Task] ERROR: {str(e)}")
+        print(f"[BG Task] Traceback:")
+        traceback.print_exc()
+        return False
 
 # Create FastAPI app
 app = FastAPI(
@@ -261,7 +276,7 @@ async def lark_meeting_webhook(
     print(f"🚀 Processing meeting: {meeting_url}")
 
     # Trigger processing in background (non-blocking)
-    background_tasks.add_task(process_meeting, meeting_url)
+    background_tasks.add_task(process_meeting_safe, meeting_url)
 
     # Return immediate response to Lark
     return {
@@ -301,7 +316,7 @@ async def manual_process(
     print(f"🚀 Manual processing triggered for: {meeting_url}")
 
     # Trigger processing in background
-    background_tasks.add_task(process_meeting, meeting_url)
+    background_tasks.add_task(process_meeting_safe, meeting_url)
 
     return {
         "status": "processing_started",
