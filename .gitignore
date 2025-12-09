@@ -68,3 +68,4 @@ segments/
 
 # Railway
 .railway/
+.lark_session.json

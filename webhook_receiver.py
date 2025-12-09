@@ -2,7 +2,7 @@
 """
 Webhook Receiver - FastAPI app to receive Lark webhooks and trigger processing
 Deploy this to Railway/Render for production use
-Supports OAuth for user_access_token (required for Minutes API)
+Uses session-based authentication for Minutes API
 """
 
 import os
@@ -16,14 +16,9 @@ import uvicorn
 # Fix encoding
 sys.stdout.reconfigure(encoding='utf-8')
 
-# Import processor and OAuth
+# Import processor and session module
 from meeting_processor import process_meeting
-from lark_oauth import (
-    exchange_code_for_token,
-    get_authorization_url,
-    get_valid_access_token,
-    REDIRECT_URI
-)
+from lark_session import save_session, load_session
 
 # Create FastAPI app
 app = FastAPI(
@@ -57,124 +52,157 @@ async def health():
     return {"status": "healthy"}
 
 
-# ==================== OAuth Endpoints ====================
+# ==================== Session Management Endpoints ====================
 
-@app.get("/oauth/authorize")
-async def oauth_authorize():
+@app.get("/session/status")
+async def session_status():
     """
-    Redirect to Lark OAuth authorization page
-
-    Open this URL to start OAuth flow:
-    https://your-app.onrender.com/oauth/authorize
+    Check current session status
     """
-    auth_url = get_authorization_url()
-    print(f"🔐 Redirecting to Lark OAuth: {auth_url}")
-    return RedirectResponse(url=auth_url)
+    session_data = load_session()
+
+    if session_data:
+        return {
+            "status": "configured",
+            "message": "Session cookies are configured",
+            "has_sl_session": "sl_session" in session_data,
+            "has_session": "session" in session_data
+        }
+    else:
+        return {
+            "status": "not_configured",
+            "message": "Session cookies not configured. Please use /session/set to configure.",
+            "setup_url": "/session/set"
+        }
 
 
-@app.get("/oauth/callback")
-async def oauth_callback(code: str = None, state: str = None, error: str = None):
+@app.get("/session/set")
+async def session_set_form():
     """
-    OAuth callback endpoint - Lark redirects here after user authorization
-
-    Args:
-        code: Authorization code from Lark
-        state: State parameter for CSRF protection
-        error: Error if authorization failed
+    Show form to set session cookies
     """
-    print("=" * 70)
-    print("📨 OAuth Callback Received")
-    print("=" * 70)
-    print(f"Code: {code[:20]}..." if code else "No code")
-    print(f"State: {state}")
-    print(f"Error: {error}")
-    print("=" * 70)
+    return HTMLResponse(content="""
+    <html>
+    <head>
+        <title>Set Lark Session</title>
+        <style>
+            body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+            h1 { color: #333; }
+            .form-group { margin-bottom: 15px; }
+            label { display: block; margin-bottom: 5px; font-weight: bold; }
+            input, textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+            textarea { height: 100px; font-family: monospace; }
+            button { background: #4CAF50; color: white; padding: 15px 30px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+            button:hover { background: #45a049; }
+            .instructions { background: #f5f5f5; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
+            code { background: #e0e0e0; padding: 2px 6px; border-radius: 3px; }
+        </style>
+    </head>
+    <body>
+        <h1>🔐 Set Lark Session Cookies</h1>
 
-    if error:
-        return HTMLResponse(content=f"""
+        <div class="instructions">
+            <h3>How to get session cookies:</h3>
+            <ol>
+                <li>Open a Lark Minutes page in your browser (logged in)</li>
+                <li>Press F12 to open Developer Tools</li>
+                <li>Go to Application tab → Cookies</li>
+                <li>Find and copy these values:
+                    <ul>
+                        <li><code>sl_session</code> - Main session token (required)</li>
+                        <li><code>session</code> - Session ID (required)</li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+
+        <form action="/session/save" method="POST">
+            <div class="form-group">
+                <label for="sl_session">sl_session (required):</label>
+                <textarea name="sl_session" id="sl_session" required placeholder="eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9..."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="session">session (required):</label>
+                <input type="text" name="session" id="session" required placeholder="XN0YXJ0-xxxxx-WVuZA">
+            </div>
+
+            <div class="form-group">
+                <label for="csrf_token">csrf_token (optional):</label>
+                <input type="text" name="csrf_token" id="csrf_token" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+            </div>
+
+            <button type="submit">💾 Save Session</button>
+        </form>
+
+        <p style="margin-top: 20px;">
+            <a href="/session/status">Check current status</a>
+        </p>
+    </body>
+    </html>
+    """)
+
+
+@app.post("/session/save")
+async def session_save(request: Request):
+    """
+    Save session cookies
+    """
+    form = await request.form()
+
+    sl_session = form.get("sl_session", "").strip()
+    session = form.get("session", "").strip()
+    csrf_token = form.get("csrf_token", "").strip()
+
+    if not sl_session or not session:
+        return HTMLResponse(content="""
         <html>
-        <head><title>OAuth Error</title></head>
         <body>
-            <h1>❌ Authorization Failed</h1>
-            <p>Error: {error}</p>
-            <p><a href="/oauth/authorize">Try again</a></p>
+            <h1>❌ Error</h1>
+            <p>sl_session and session are required.</p>
+            <p><a href="/session/set">Go back</a></p>
         </body>
         </html>
         """, status_code=400)
 
-    if not code:
-        return HTMLResponse(content=f"""
+    session_data = {
+        "sl_session": sl_session,
+        "session": session
+    }
+
+    if csrf_token:
+        session_data["csrf_token"] = csrf_token
+
+    if save_session(session_data):
+        return HTMLResponse(content="""
         <html>
-        <head><title>OAuth Error</title></head>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }
+                .success { color: #4CAF50; font-size: 48px; }
+            </style>
+        </head>
         <body>
-            <h1>❌ No Authorization Code</h1>
-            <p>No code parameter received from Lark.</p>
-            <p><a href="/oauth/authorize">Try again</a></p>
-        </body>
-        </html>
-        """, status_code=400)
-
-    # Exchange code for token
-    token_data = exchange_code_for_token(code, REDIRECT_URI)
-
-    if token_data:
-        access_token = token_data.get('access_token', '')
-        expires_in = token_data.get('expires_in', 0)
-        refresh_expires = token_data.get('refresh_token_expires_in', 0)
-
-        return HTMLResponse(content=f"""
-        <html>
-        <head><title>OAuth Success</title></head>
-        <body>
-            <h1>✅ Authorization Successful!</h1>
-            <p>Token has been saved. The system will auto-refresh when needed.</p>
-            <hr>
-            <h3>Token Details:</h3>
-            <ul>
-                <li><strong>Access Token:</strong> {access_token[:30]}...</li>
-                <li><strong>Expires In:</strong> {expires_in} seconds ({expires_in // 60} minutes)</li>
-                <li><strong>Refresh Token Expires In:</strong> {refresh_expires} seconds ({refresh_expires // 3600} hours)</li>
-            </ul>
-            <hr>
-            <p>You can now close this page. Webhooks will use this token automatically.</p>
-            <p><a href="/oauth/status">Check Token Status</a></p>
+            <div class="success">✅</div>
+            <h1>Session Saved Successfully!</h1>
+            <p>The system is now ready to download Lark meetings.</p>
+            <p>
+                <a href="/session/status">Check Status</a> |
+                <a href="/">Home</a>
+            </p>
         </body>
         </html>
         """)
     else:
-        return HTMLResponse(content=f"""
+        return HTMLResponse(content="""
         <html>
-        <head><title>OAuth Error</title></head>
         <body>
-            <h1>❌ Token Exchange Failed</h1>
-            <p>Could not exchange authorization code for token.</p>
-            <p>Please check the server logs for details.</p>
-            <p><a href="/oauth/authorize">Try again</a></p>
+            <h1>❌ Failed to Save Session</h1>
+            <p>Please check server logs for details.</p>
+            <p><a href="/session/set">Try again</a></p>
         </body>
         </html>
         """, status_code=500)
-
-
-@app.get("/oauth/status")
-async def oauth_status():
-    """
-    Check current OAuth token status
-    """
-    token = get_valid_access_token()
-
-    if token:
-        return {
-            "status": "valid",
-            "message": "Access token is valid and ready to use",
-            "token_preview": f"{token[:30]}..."
-        }
-    else:
-        auth_url = get_authorization_url()
-        return {
-            "status": "invalid",
-            "message": "No valid token. Authorization required.",
-            "authorize_url": auth_url
-        }
 
 
 @app.post("/webhook/lark-meeting")
